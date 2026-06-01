@@ -554,9 +554,23 @@ Delete도 update와 비슷하다.
 
 미션에서 중요한 개념 중 하나가 `yield` 기반 제너레이터다.
 
+> [!summary]
+> 제너레이터는 데이터를 **한 번에 전부 만들지 않고, 필요할 때 하나씩 꺼내 쓰는 방식**이다.  
+> 이번 가계부 미션에서는 `transactions.jsonl` 파일을 한 줄씩 읽으면서 거래를 하나씩 처리할 때 사용한다.
+
 ## 8.1 제너레이터란?
 
 제너레이터는 값을 한 번에 모두 만들지 않고, 필요할 때 하나씩 만들어내는 객체다.
+
+조금 더 쉽게 말하면, 제너레이터는 **자동 판매기**처럼 생각할 수 있다.
+
+```text
+일반 리스트:
+처음부터 음료 100개를 전부 책상 위에 올려둔다.
+
+제너레이터:
+버튼을 누를 때마다 음료 1개씩 나온다.
+```
 
 일반 함수:
 
@@ -576,7 +590,219 @@ def generate_numbers():
 
 일반 함수는 리스트 전체를 한 번에 반환한다. 제너레이터는 값을 하나씩 흘려보낸다.
 
-## 8.2 왜 필요한가?
+## 8.2 `return`과 `yield`의 차이
+
+초보자가 가장 헷갈리기 쉬운 부분이 `return`과 `yield`의 차이다.
+
+### `return`
+
+`return`은 함수를 **끝내면서 결과를 돌려준다**.
+
+```python
+def normal_function():
+    print("시작")
+    return 1
+    print("여기는 실행되지 않음")
+
+result = normal_function()
+print(result)
+```
+
+실행 흐름:
+
+```text
+1. normal_function() 호출
+2. "시작" 출력
+3. return 1 실행
+4. 함수 종료
+5. result에 1 저장
+```
+
+`return`이 실행되면 함수는 끝난다. 그 아래 코드는 실행되지 않는다.
+
+### `yield`
+
+`yield`는 함수를 완전히 끝내지 않고, 값을 하나 내보낸 뒤 **잠시 멈춘다**.
+
+```python
+def generator_function():
+    print("첫 번째 준비")
+    yield 1
+
+    print("두 번째 준비")
+    yield 2
+
+    print("세 번째 준비")
+    yield 3
+```
+
+이 함수는 호출한다고 바로 실행되지 않는다.
+
+```python
+gen = generator_function()
+```
+
+위 코드를 실행해도 아직 `"첫 번째 준비"`가 출력되지 않는다.  
+이때 `gen`은 값을 꺼낼 준비가 된 제너레이터 객체다.
+
+값을 꺼내려면 `next()`를 사용한다.
+
+```python
+print(next(gen))
+print(next(gen))
+print(next(gen))
+```
+
+실행 흐름:
+
+```text
+첫 번째 next(gen)
+-> "첫 번째 준비" 출력
+-> yield 1
+-> 1을 바깥으로 내보내고 함수 멈춤
+
+두 번째 next(gen)
+-> 멈췄던 yield 1 다음 줄부터 다시 실행
+-> "두 번째 준비" 출력
+-> yield 2
+-> 2를 바깥으로 내보내고 함수 멈춤
+
+세 번째 next(gen)
+-> 멈췄던 yield 2 다음 줄부터 다시 실행
+-> "세 번째 준비" 출력
+-> yield 3
+-> 3을 바깥으로 내보내고 함수 멈춤
+```
+
+핵심 차이:
+
+| 구분 | `return` | `yield` |
+| --- | --- | --- |
+| 함수 종료 여부 | 값을 돌려주고 함수 종료 | 값을 내보내고 함수 일시 정지 |
+| 여러 번 값 전달 | 보통 한 번 | 여러 번 가능 |
+| 메모리 사용 | 결과를 한 번에 만들기 쉬움 | 값을 하나씩 만들기 쉬움 |
+| 대표 사용처 | 계산 결과 반환 | 큰 데이터 반복 처리 |
+
+> [!important]
+> `yield`가 들어간 함수는 일반 함수가 아니라 **제너레이터 함수**가 된다.  
+> 제너레이터 함수는 호출하면 결과값이 바로 나오는 것이 아니라, 값을 하나씩 꺼낼 수 있는 제너레이터 객체를 만든다.
+
+## 8.3 `for`문과 제너레이터
+
+실제로는 `next()`를 직접 쓰는 경우보다 `for`문으로 제너레이터를 사용하는 경우가 많다.
+
+```python
+def generate_numbers():
+    yield 1
+    yield 2
+    yield 3
+
+for number in generate_numbers():
+    print(number)
+```
+
+`for`문은 내부적으로 다음 일을 한다.
+
+```text
+1. 제너레이터에서 next()로 값을 하나 꺼낸다.
+2. 꺼낸 값을 number에 넣는다.
+3. for문 본문을 실행한다.
+4. 다시 next()로 다음 값을 꺼낸다.
+5. 더 이상 값이 없으면 반복을 끝낸다.
+```
+
+즉, 아래 코드는:
+
+```python
+for tx in iter_transactions():
+    print(tx)
+```
+
+대략 이런 뜻이다.
+
+```text
+거래를 하나 꺼낸다.
+출력한다.
+다음 거래를 하나 꺼낸다.
+출력한다.
+더 이상 거래가 없으면 멈춘다.
+```
+
+## 8.4 리스트 방식과 제너레이터 방식 비교
+
+거래 파일을 읽는 함수를 만든다고 생각해보자.
+
+### 리스트 방식
+
+```python
+def read_all_transactions():
+    transactions = []
+
+    with open("transactions.jsonl", "r", encoding="utf-8") as file:
+        for line in file:
+            transaction = parse_transaction(line)
+            transactions.append(transaction)
+
+    return transactions
+```
+
+사용:
+
+```python
+transactions = read_all_transactions()
+
+for tx in transactions:
+    print(tx)
+```
+
+이 방식은 파일의 모든 거래를 리스트에 담은 뒤 반환한다.
+
+장점:
+
+- 이해하기 쉽다.
+- 정렬, 개수 세기, 여러 번 반복하기가 편하다.
+
+단점:
+
+- 파일이 크면 메모리를 많이 쓴다.
+- 첫 번째 거래 하나만 필요해도 전체 파일을 다 읽는다.
+
+### 제너레이터 방식
+
+```python
+def iter_transactions():
+    with open("transactions.jsonl", "r", encoding="utf-8") as file:
+        for line in file:
+            transaction = parse_transaction(line)
+            yield transaction
+```
+
+사용:
+
+```python
+for tx in iter_transactions():
+    print(tx)
+```
+
+이 방식은 거래를 하나 읽고, 하나 내보내고, 다시 다음 줄을 읽는다.
+
+장점:
+
+- 메모리를 적게 쓴다.
+- 큰 파일에도 강하다.
+- 조건 검색과 잘 어울린다.
+- "필요한 만큼만" 처리할 수 있다.
+
+단점:
+
+- 한 번 지나간 값을 다시 쓰려면 다시 읽어야 한다.
+- 전체 정렬이 필요한 작업은 결국 일부 데이터를 모아야 할 수 있다.
+
+> [!note]
+> 제너레이터는 "항상 리스트보다 좋다"가 아니다.  
+> **큰 데이터를 한 번 훑으며 처리할 때** 특히 좋다.
+
+## 8.5 왜 필요한가?
 
 거래 파일이 작을 때는 차이가 별로 없다.
 
@@ -602,7 +828,206 @@ for tx in iter_transactions():
 - 조건에 맞는 데이터만 바로 출력할 수 있다.
 - `list`, `search`, `summary`, `export`에 잘 어울린다.
 
-## 8.3 스트리밍 처리
+## 8.6 이번 미션에서 제너레이터를 쓰는 위치
+
+이번 미션에서 가장 자연스러운 제너레이터 사용처는 거래 파일 읽기다.
+
+예상 저장 파일:
+
+```text
+data/transactions.jsonl
+```
+
+파일 내용:
+
+```jsonl
+{"id":"TX-000001","type":"expense","date":"2024-01-01","amount":8000,"category":"food","memo":"김밥","tags":["meal"]}
+{"id":"TX-000002","type":"income","date":"2024-01-05","amount":300000,"category":"salary","memo":"알바비","tags":[]}
+{"id":"TX-000003","type":"expense","date":"2024-01-07","amount":45000,"category":"transport","memo":"교통카드","tags":["bus"]}
+```
+
+이 파일을 읽는 함수는 개념적으로 이렇게 만들 수 있다.
+
+```python
+import json
+
+def iter_transactions(path):
+    with open(path, "r", encoding="utf-8") as file:
+        for line in file:
+            if not line.strip():
+                continue
+
+            data = json.loads(line)
+            yield data
+```
+
+사용:
+
+```python
+for transaction in iter_transactions("data/transactions.jsonl"):
+    print(transaction["id"], transaction["amount"])
+```
+
+여기서 중요한 점:
+
+- 파일 전체를 리스트로 만들지 않는다.
+- 한 줄 읽는다.
+- JSON으로 바꾼다.
+- `yield`로 한 거래를 내보낸다.
+- 다음 거래는 필요할 때 읽는다.
+
+## 8.7 검색에서의 제너레이터 흐름
+
+`search` 명령을 예로 들어보자.
+
+```bash
+python -m budget_app search --category food
+```
+
+내부 흐름은 이렇게 생각할 수 있다.
+
+```text
+transactions.jsonl 첫 줄 읽기
+-> category가 food인지 검사
+-> 맞으면 출력
+-> 다음 줄 읽기
+-> category가 food인지 검사
+-> 맞으면 출력
+-> 파일 끝까지 반복
+```
+
+코드 개념:
+
+```python
+def search_by_category(path, category):
+    for tx in iter_transactions(path):
+        if tx["category"] == category:
+            yield tx
+```
+
+사용:
+
+```python
+for tx in search_by_category("data/transactions.jsonl", "food"):
+    print(tx)
+```
+
+여기서 `search_by_category()`도 제너레이터다.  
+왜냐하면 함수 안에 `yield tx`가 있기 때문이다.
+
+> [!tip]
+> 제너레이터는 여러 개를 이어 붙일 수 있다.  
+> `파일 읽기 제너레이터 -> 검색 제너레이터 -> 출력` 같은 흐름을 만들 수 있다.
+
+## 8.8 summary에서의 제너레이터 흐름
+
+`summary`는 거래를 출력하는 기능이 아니라 합계를 계산하는 기능이다.
+
+```bash
+python -m budget_app summary --month 2024-01
+```
+
+흐름:
+
+```text
+거래를 하나씩 읽는다.
+해당 월 거래인지 확인한다.
+income이면 총수입에 더한다.
+expense면 총지출에 더한다.
+expense면 카테고리별 합계에도 더한다.
+마지막에 결과를 출력한다.
+```
+
+이 경우에도 전체 거래 리스트가 꼭 필요하지 않다.
+
+```python
+total_income = 0
+total_expense = 0
+
+for tx in iter_transactions("data/transactions.jsonl"):
+    if not tx["date"].startswith("2024-01"):
+        continue
+
+    if tx["type"] == "income":
+        total_income += tx["amount"]
+    else:
+        total_expense += tx["amount"]
+```
+
+`summary`는 모든 거래를 한 번 훑으면서 필요한 숫자만 누적하면 된다.  
+이런 작업은 제너레이터와 잘 맞는다.
+
+## 8.9 제너레이터를 사용할 때 주의할 점
+
+### 한 번 소비하면 다시 처음으로 돌아가지 않는다
+
+제너레이터는 값을 하나씩 꺼내는 흐름이다.  
+한 번 끝까지 읽으면 다시 처음으로 돌아가지 않는다.
+
+```python
+gen = generate_numbers()
+
+for number in gen:
+    print(number)
+
+for number in gen:
+    print(number)  # 아무것도 출력되지 않음
+```
+
+다시 반복하고 싶으면 제너레이터를 새로 만들어야 한다.
+
+```python
+for number in generate_numbers():
+    print(number)
+
+for number in generate_numbers():
+    print(number)
+```
+
+### 정렬하려면 결국 모아야 한다
+
+제너레이터는 하나씩 처리하는 데 강하지만, 정렬은 전체를 비교해야 한다.
+
+```python
+transactions = list(iter_transactions(path))
+transactions.sort(key=lambda tx: tx["date"], reverse=True)
+```
+
+이렇게 하면 리스트로 모으게 된다.
+
+따라서 최신순 정렬이 필요한 `list`, `search`에서는 다음 중 하나를 선택해야 한다.
+
+- 결과를 모은 뒤 정렬한다.
+- 저장 순서를 최신순으로 유지한다.
+- `--limit`이 있을 때 필요한 개수만 관리한다.
+
+이번 미션에서는 정확한 최신순 출력이 중요하므로, 필요한 경우 일부 리스트화를 허용해도 된다.
+
+### `yield`와 `return`을 섞을 때
+
+제너레이터 함수에서도 `return`을 쓸 수 있지만, 일반 함수처럼 값을 반환하는 용도로 자주 쓰지는 않는다.
+
+```python
+def gen():
+    yield 1
+    return
+    yield 2
+```
+
+이 경우 `yield 2`는 실행되지 않는다.  
+제너레이터 안의 `return`은 "이제 더 이상 내보낼 값이 없다"는 뜻에 가깝다.
+
+## 8.10 이 미션에서 기억할 핵심
+
+| 질문 | 답 |
+| --- | --- |
+| 제너레이터는 무엇인가? | 값을 한 번에 만들지 않고 하나씩 내보내는 객체 |
+| `yield`는 무엇인가? | 값을 하나 내보내고 함수를 잠시 멈추는 키워드 |
+| 왜 쓰는가? | 큰 파일을 메모리에 전부 올리지 않기 위해 |
+| 어디에 쓰는가? | 거래 파일 읽기, 검색, 요약, export |
+| 주의할 점은? | 한 번 소비하면 다시 쓰려면 새로 만들어야 하고, 정렬은 모아야 할 수 있다 |
+
+## 8.11 스트리밍 처리
 
 스트리밍 처리는 데이터를 한꺼번에 다 읽지 않고 흐름처럼 조금씩 처리하는 방식이다.
 
@@ -619,7 +1044,7 @@ transactions.jsonl 전체를 리스트로 만들지 않고,
 한 줄씩 읽으면서 조건에 맞는 거래만 출력한다.
 ```
 
-## 8.4 최신순 출력과 스트리밍의 충돌
+## 8.12 최신순 출력과 스트리밍의 충돌
 
 요구사항에는 `list`와 `search` 결과를 최신순으로 출력하라는 조건이 있다.
 
@@ -641,6 +1066,10 @@ transactions.jsonl 전체를 리스트로 만들지 않고,
 # 9. 데코레이터
 
 데코레이터는 함수의 앞뒤에 공통 기능을 덧붙이는 도구다.
+
+> [!summary]
+> 데코레이터는 **기존 함수 코드를 직접 고치지 않고, 함수 실행 전후에 부가 기능을 붙이는 문법**이다.  
+> 이번 미션에서는 오류 처리, 실행 시간 측정, 로그 출력처럼 여러 명령에서 반복되는 기능을 깔끔하게 분리할 때 쓴다.
 
 이번 미션에서는 다음과 같은 공통 관심사를 데코레이터로 분리하라고 되어 있다.
 
@@ -666,6 +1095,21 @@ search에서 오류가 나면 친절한 메시지 출력하기
 
 데코레이터는 함수를 감싸는 함수다.
 
+조금 더 쉽게 말하면, 데코레이터는 함수에 입히는 **겉옷** 같은 것이다.
+
+```text
+원래 함수:
+명령의 핵심 기능만 수행한다.
+
+데코레이터를 입힌 함수:
+명령 실행 전 로그 출력
+-> 원래 함수 실행
+-> 오류가 나면 친절한 메시지 출력
+-> 실행 시간 출력
+```
+
+원래 함수의 코드를 매번 고치지 않고도 기능을 덧붙일 수 있다.
+
 개념적으로:
 
 ```python
@@ -682,7 +1126,261 @@ command = decorator(command)
 
 즉, 원래 함수를 다른 함수로 감싼다.
 
-## 9.3 예외 처리 데코레이터
+## 9.3 함수도 값이다
+
+데코레이터를 이해하려면 먼저 Python에서 함수도 값처럼 다룰 수 있다는 것을 알아야 한다.
+
+```python
+def say_hello():
+    print("hello")
+
+greeting = say_hello
+greeting()
+```
+
+위 코드에서 `greeting = say_hello`는 함수를 복사해서 실행한 것이 아니다.  
+`say_hello`라는 함수 자체를 `greeting`이라는 이름으로도 부를 수 있게 만든 것이다.
+
+그래서 다음 두 호출은 같은 함수를 실행한다.
+
+```python
+say_hello()
+greeting()
+```
+
+이 개념이 데코레이터의 출발점이다.
+
+## 9.4 함수를 인자로 받는 함수
+
+함수는 값처럼 다룰 수 있으므로, 다른 함수의 인자로 전달할 수 있다.
+
+```python
+def say_hello():
+    print("hello")
+
+def run_function(func):
+    print("함수를 실행하기 전")
+    func()
+    print("함수를 실행한 후")
+
+run_function(say_hello)
+```
+
+실행 흐름:
+
+```text
+1. run_function에 say_hello 함수를 전달한다.
+2. "함수를 실행하기 전" 출력
+3. func() 실행
+4. 실제로는 say_hello()가 실행된다.
+5. "hello" 출력
+6. "함수를 실행한 후" 출력
+```
+
+여기서 `run_function()`은 이미 데코레이터와 비슷한 일을 하고 있다.  
+원래 함수 앞뒤에 다른 일을 끼워 넣고 있기 때문이다.
+
+## 9.5 함수를 반환하는 함수
+
+데코레이터는 보통 함수를 인자로 받고, 새로운 함수를 반환한다.
+
+```python
+def simple_decorator(func):
+    def wrapper():
+        print("함수 실행 전")
+        func()
+        print("함수 실행 후")
+
+    return wrapper
+```
+
+여기서 역할은 다음과 같다.
+
+| 이름 | 역할 |
+| --- | --- |
+| `simple_decorator` | 데코레이터 함수 |
+| `func` | 감싸고 싶은 원래 함수 |
+| `wrapper` | 원래 함수 앞뒤에 기능을 붙인 새 함수 |
+| `return wrapper` | 새 함수를 바깥으로 돌려줌 |
+
+사용:
+
+```python
+def say_hello():
+    print("hello")
+
+decorated = simple_decorator(say_hello)
+decorated()
+```
+
+출력:
+
+```text
+함수 실행 전
+hello
+함수 실행 후
+```
+
+핵심은 이것이다.
+
+```text
+say_hello 함수 자체를 바꾸지 않았는데,
+say_hello 앞뒤에 동작이 추가되었다.
+```
+
+## 9.6 `@decorator` 문법
+
+Python은 데코레이터를 더 짧게 쓸 수 있도록 `@` 문법을 제공한다.
+
+아래 두 코드는 같은 의미다.
+
+### 직접 감싸기
+
+```python
+def say_hello():
+    print("hello")
+
+say_hello = simple_decorator(say_hello)
+```
+
+### `@` 문법 사용
+
+```python
+@simple_decorator
+def say_hello():
+    print("hello")
+```
+
+즉:
+
+```python
+@simple_decorator
+def say_hello():
+    ...
+```
+
+는 다음과 같은 뜻이다.
+
+```python
+say_hello = simple_decorator(say_hello)
+```
+
+> [!important]
+> `@decorator`는 마법처럼 보이지만, 실제로는 **함수를 다른 함수로 감싸서 다시 같은 이름에 넣는 문법**이다.
+
+## 9.7 인자가 있는 함수 감싸기
+
+실제 프로그램의 함수는 대부분 인자를 가진다.
+
+예:
+
+```python
+def add_transaction(date, amount):
+    print(date, amount)
+```
+
+이런 함수를 감싸려면 `wrapper`도 인자를 받을 수 있어야 한다.
+
+```python
+def simple_decorator(func):
+    def wrapper(*args, **kwargs):
+        print("함수 실행 전")
+        result = func(*args, **kwargs)
+        print("함수 실행 후")
+        return result
+
+    return wrapper
+```
+
+여기서:
+
+- `*args`는 위치 인자를 모은다.
+- `**kwargs`는 키워드 인자를 모은다.
+
+예:
+
+```python
+@simple_decorator
+def add_transaction(date, amount):
+    print(f"{date}: {amount}")
+
+add_transaction("2024-01-15", 15000)
+```
+
+실행 흐름:
+
+```text
+1. add_transaction("2024-01-15", 15000) 호출
+2. 실제로는 wrapper("2024-01-15", 15000) 실행
+3. "함수 실행 전" 출력
+4. func(*args, **kwargs) 실행
+5. 원래 add_transaction 실행
+6. "2024-01-15: 15000" 출력
+7. "함수 실행 후" 출력
+```
+
+## 9.8 반환값이 있는 함수 감싸기
+
+원래 함수가 값을 반환한다면, wrapper도 그 값을 다시 반환해야 한다.
+
+나쁜 예:
+
+```python
+def bad_decorator(func):
+    def wrapper(*args, **kwargs):
+        func(*args, **kwargs)
+
+    return wrapper
+```
+
+이 데코레이터는 원래 함수의 반환값을 버린다.
+
+좋은 예:
+
+```python
+def good_decorator(func):
+    def wrapper(*args, **kwargs):
+        result = func(*args, **kwargs)
+        return result
+
+    return wrapper
+```
+
+이번 미션에서 CLI 명령 함수가 exit code를 반환한다면, 데코레이터는 그 exit code를 그대로 돌려줘야 한다.
+
+```python
+@good_decorator
+def handle_list_command(args):
+    ...
+    return 0
+```
+
+## 9.9 함수 이름 보존하기: `functools.wraps`
+
+데코레이터를 만들 때는 `functools.wraps`를 자주 사용한다.
+
+```python
+from functools import wraps
+
+def simple_decorator(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return wrapper
+```
+
+왜 필요할까?
+
+데코레이터는 원래 함수를 `wrapper` 함수로 바꾼다.  
+그 결과 함수 이름이나 설명이 전부 `wrapper`처럼 보일 수 있다.
+
+`@wraps(func)`를 붙이면 원래 함수의 이름, 설명, 메타데이터를 최대한 유지해준다.
+
+> [!tip]
+> 데코레이터를 직접 만들 때는 거의 습관처럼 `@wraps(func)`를 붙이는 것이 좋다.
+
+## 9.10 예외 처리 데코레이터
 
 미션에서는 오류가 발생했을 때 스택트레이스를 그대로 출력하지 말아야 한다.
 
@@ -710,7 +1408,45 @@ ValueError: invalid literal for int()
 -> 오류 exit code 반환
 ```
 
-## 9.4 실행 시간 측정 데코레이터
+예시:
+
+```python
+from functools import wraps
+
+class AppError(Exception):
+    pass
+
+def handle_errors(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except AppError as error:
+            print(f"[오류] {error}")
+            print("힌트: 입력값을 다시 확인하세요.")
+            return 1
+
+    return wrapper
+```
+
+사용:
+
+```python
+@handle_errors
+def handle_add_command(args):
+    raise AppError("금액은 양수 정수여야 합니다.")
+```
+
+실행 결과:
+
+```text
+[오류] 금액은 양수 정수여야 합니다.
+힌트: 입력값을 다시 확인하세요.
+```
+
+이렇게 하면 `handle_add_command`, `handle_search_command`, `handle_summary_command`마다 매번 `try/except`를 반복하지 않아도 된다.
+
+## 9.11 실행 시간 측정 데코레이터
 
 시간 측정은 프로그램 성능을 확인하는 데 도움이 된다.
 
@@ -725,6 +1461,151 @@ ValueError: invalid literal for int()
 ```
 
 이 기능을 명령마다 직접 작성하면 지저분해진다. 데코레이터로 분리하면 핵심 로직은 깔끔하게 유지된다.
+
+예시:
+
+```python
+from functools import wraps
+from time import perf_counter
+
+def measure_time(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start = perf_counter()
+        try:
+            return func(*args, **kwargs)
+        finally:
+            end = perf_counter()
+            elapsed = end - start
+            print(f"[실행 시간] {elapsed:.3f}초")
+
+    return wrapper
+```
+
+여기서 `finally`는 함수가 성공하든 오류가 나든 마지막에 실행된다.  
+그래서 실행 시간 측정에 잘 맞는다.
+
+## 9.12 데코레이터 여러 개 붙이기
+
+데코레이터는 한 함수에 여러 개 붙일 수 있다.
+
+```python
+@handle_errors
+@measure_time
+def handle_summary_command(args):
+    ...
+```
+
+이 코드는 아래와 비슷하다.
+
+```python
+handle_summary_command = handle_errors(measure_time(handle_summary_command))
+```
+
+실행 순서를 쉽게 생각하면:
+
+```text
+바깥쪽 handle_errors가 전체를 감싼다.
+그 안에서 measure_time이 시간을 잰다.
+그 안에서 원래 handle_summary_command가 실행된다.
+```
+
+데코레이터 순서는 결과에 영향을 줄 수 있다.  
+예를 들어 오류 처리 데코레이터가 가장 바깥에 있으면, 안쪽에서 발생한 오류를 잡기 쉽다.
+
+## 9.13 이번 미션에서 데코레이터를 쓰는 위치
+
+추천 사용처:
+
+| 데코레이터 | 적용 대상 | 목적 |
+| --- | --- | --- |
+| `handle_errors` | CLI 명령 처리 함수 | 스택트레이스 대신 친절한 오류 메시지 출력 |
+| `measure_time` | `list`, `search`, `summary`, `import`, `export` | 처리 시간 확인 |
+| `log_command` | 주요 명령 처리 함수 | 어떤 명령이 실행됐는지 기록 |
+
+예:
+
+```python
+@handle_errors
+@measure_time
+def handle_search_command(args):
+    results = service.search_transactions(
+        date_from=args.date_from,
+        date_to=args.date_to,
+        category=args.category,
+        transaction_type=args.type,
+        keyword=args.q,
+        tag=args.tag,
+    )
+
+    for tx in results:
+        print_transaction(tx)
+
+    return 0
+```
+
+이렇게 하면 `handle_search_command()` 안에는 검색 핵심 로직만 남기고, 오류 처리와 시간 측정은 바깥으로 분리할 수 있다.
+
+## 9.14 데코레이터를 사용할 때 주의할 점
+
+### 원래 함수의 반환값을 꼭 반환하기
+
+CLI 함수가 `0`이나 `1` 같은 exit code를 반환한다면, 데코레이터도 그 값을 그대로 반환해야 한다.
+
+```python
+result = func(*args, **kwargs)
+return result
+```
+
+이 부분을 빼먹으면 함수가 `None`을 반환하게 된다.
+
+### 너무 많은 일을 데코레이터에 넣지 않기
+
+데코레이터는 공통 관심사를 분리할 때 좋다.  
+하지만 핵심 비즈니스 로직까지 데코레이터에 넣으면 오히려 읽기 어려워진다.
+
+좋은 사용:
+
+- 오류 메시지 정리
+- 실행 시간 측정
+- 로그 출력
+
+피하는 것이 좋은 사용:
+
+- 거래 저장 로직
+- 카테고리 검증 로직 전체
+- summary 계산 로직
+
+### 데코레이터 실행 순서 이해하기
+
+여러 데코레이터를 붙이면 순서가 중요하다.
+
+```python
+@A
+@B
+def func():
+    ...
+```
+
+이 코드는:
+
+```python
+func = A(B(func))
+```
+
+와 같다.
+
+헷갈리면 처음에는 데코레이터를 하나씩만 붙이고, 동작을 확인한 뒤 늘리는 것이 좋다.
+
+## 9.15 데코레이터 핵심 요약
+
+| 질문 | 답 |
+| --- | --- |
+| 데코레이터는 무엇인가? | 함수를 감싸서 실행 전후에 기능을 추가하는 함수 |
+| `@decorator`는 무슨 뜻인가? | `함수 = decorator(함수)`를 짧게 쓴 문법 |
+| 왜 쓰는가? | 반복되는 오류 처리, 로그, 시간 측정을 한곳에 모으기 위해 |
+| 이번 미션 어디에 쓰는가? | CLI 명령 함수의 오류 처리, 실행 시간 측정 |
+| 주의할 점은? | 반환값 보존, `@wraps` 사용, 실행 순서 이해 |
 
 ---
 
