@@ -211,6 +211,263 @@ limit = 5
 > [!tip]
 > `argparse`는 표준 라이브러리이므로 이번 미션의 "외부 라이브러리 금지" 조건을 만족한다.
 
+## 3.4 CLI 파서란?
+
+CLI 파서는 사용자가 터미널에 입력한 문자열을 프로그램이 이해할 수 있는 구조로 바꿔주는 도구다.
+
+사용자는 터미널에 이렇게 입력한다.
+
+```bash
+python -m budget_app search --from 2024-01-01 --to 2024-01-31 --category food
+```
+
+사람은 이 문장을 읽고 바로 이해할 수 있다.
+
+```text
+budget_app 프로그램의 search 기능을 실행하되,
+2024-01-01부터 2024-01-31까지,
+category가 food인 거래를 찾으라는 뜻
+```
+
+하지만 프로그램 입장에서는 처음에 이것이 그냥 문자열 조각들의 묶음이다.
+
+```text
+["search", "--from", "2024-01-01", "--to", "2024-01-31", "--category", "food"]
+```
+
+CLI 파서는 이 조각들을 해석해서 다음처럼 의미 있는 데이터로 바꿔준다.
+
+```text
+command = "search"
+from_date = "2024-01-01"
+to_date = "2024-01-31"
+category = "food"
+```
+
+즉, CLI 파서는 **터미널 명령어 번역기**라고 보면 된다.
+
+## 3.5 `argparse`가 없으면 어떻게 될까?
+
+`argparse`를 사용하지 않으면 직접 명령어를 해석해야 한다.
+
+예를 들어 사용자가 다음처럼 입력했다고 하자.
+
+```bash
+python -m budget_app list --limit 5
+```
+
+프로그램 내부에서는 보통 `sys.argv`로 입력값을 볼 수 있다.
+
+```python
+import sys
+
+print(sys.argv)
+```
+
+대략 이런 리스트가 나온다.
+
+```python
+["/path/to/budget_app", "list", "--limit", "5"]
+```
+
+직접 파싱하려면 다음 일을 해야 한다.
+
+```text
+1. 두 번째 값이 명령어인지 확인한다.
+2. "--limit" 옵션이 있는지 찾는다.
+3. "--limit" 다음 값이 존재하는지 확인한다.
+4. "5"를 정수로 바꾼다.
+5. 값이 없거나 숫자가 아니면 오류를 낸다.
+6. --help도 직접 처리한다.
+```
+
+이런 일을 모든 명령마다 직접 만들면 코드가 금방 복잡해진다.
+
+`argparse`는 이 반복 작업을 대신해준다.
+
+## 3.6 `argparse`의 기본 구조
+
+`argparse`의 기본 흐름은 보통 이렇다.
+
+```python
+import argparse
+
+parser = argparse.ArgumentParser(
+    prog="budget_app",
+    description="파일 기반 가계부 콘솔 프로그램",
+)
+
+parser.add_argument("command")
+parser.add_argument("--limit", type=int, default=10)
+
+args = parser.parse_args()
+
+print(args.command)
+print(args.limit)
+```
+
+사용자가 이렇게 실행하면:
+
+```bash
+python -m budget_app list --limit 5
+```
+
+`args` 안에는 이런 값이 들어간다.
+
+```text
+args.command = "list"
+args.limit = 5
+```
+
+여기서 중요한 점은 `--limit`으로 들어온 `"5"`가 `type=int` 덕분에 정수 `5`로 변환된다는 것이다.
+
+## 3.7 명령어가 여러 개일 때: subparser
+
+이번 미션은 명령어가 하나가 아니다.
+
+```text
+add
+list
+search
+summary
+budget
+category
+update
+delete
+import
+export
+```
+
+이렇게 여러 명령을 가진 CLI에서는 `subparser`를 사용한다.
+
+개념적으로는 다음과 같다.
+
+```text
+큰 파서:
+budget_app 전체를 담당
+
+작은 파서:
+add 명령 담당
+list 명령 담당
+search 명령 담당
+summary 명령 담당
+...
+```
+
+예시:
+
+```python
+import argparse
+
+parser = argparse.ArgumentParser(prog="budget_app")
+subparsers = parser.add_subparsers(dest="command", required=True)
+
+list_parser = subparsers.add_parser("list")
+list_parser.add_argument("--limit", type=int, default=10)
+
+search_parser = subparsers.add_parser("search")
+search_parser.add_argument("--category")
+search_parser.add_argument("--type", choices=["income", "expense"])
+
+args = parser.parse_args()
+```
+
+실행:
+
+```bash
+python -m budget_app list --limit 3
+```
+
+결과:
+
+```text
+args.command = "list"
+args.limit = 3
+```
+
+실행:
+
+```bash
+python -m budget_app search --category food --type expense
+```
+
+결과:
+
+```text
+args.command = "search"
+args.category = "food"
+args.type = "expense"
+```
+
+## 3.8 `argparse`에서 자주 쓰는 옵션들
+
+| 코드 | 의미 |
+| --- | --- |
+| `add_argument("name")` | 필수 위치 인자 |
+| `add_argument("--limit")` | 선택 옵션 |
+| `type=int` | 입력값을 정수로 변환 |
+| `default=10` | 값이 없을 때 기본값 |
+| `required=True` | 반드시 입력해야 하는 옵션 |
+| `choices=[...]` | 허용된 값만 받음 |
+| `dest="command"` | 파싱 결과가 저장될 이름 |
+
+예:
+
+```python
+search_parser.add_argument("--type", choices=["income", "expense"])
+```
+
+이렇게 하면 사용자가 잘못 입력했을 때 `argparse`가 막아준다.
+
+```bash
+python -m budget_app search --type wrong
+```
+
+`wrong`은 `income`, `expense` 중 하나가 아니므로 오류가 난다.
+
+## 3.9 이번 미션의 CLI 파서 설계 방향
+
+이번 미션에서는 다음처럼 설계하는 것이 좋다.
+
+```text
+budget_app
+  add
+  list --limit N
+  search --from DATE --to DATE --category NAME --type TYPE -q TEXT --tag TAG
+  summary --month YYYY-MM --top N
+  budget set --month YYYY-MM --amount AMOUNT
+  category add NAME
+  category list
+  category remove NAME
+  update --id ID ...
+  delete --id ID
+  import --from CSV
+  export --out CSV --month YYYY-MM
+```
+
+CLI 파서의 책임은 여기까지다.
+
+```text
+사용자의 입력을 해석한다.
+옵션 값을 args에 담는다.
+어떤 명령을 실행해야 할지 결정한다.
+```
+
+반대로 CLI 파서가 직접 하면 좋지 않은 일도 있다.
+
+```text
+거래 파일에 저장하기
+summary 계산하기
+카테고리 삭제 정책 판단하기
+CSV 파일을 직접 처리하기
+```
+
+이런 일은 `service`나 `repository` 계층으로 넘기는 것이 좋다.
+
+> [!important]
+> CLI 파서는 "입력 해석 담당"이다.  
+> 실제 가계부 규칙은 Service가, 파일 저장은 Repository가 담당하게 나누면 구조가 깔끔해진다.
+
 ---
 
 # 4. 데이터 모델 설계
@@ -287,6 +544,10 @@ limit = 5
 
 Python의 `dataclasses.dataclass`는 데이터 객체를 간결하게 정의하기 위한 표준 기능이다.
 
+> [!summary]
+> `dataclass`는 **데이터를 담는 클래스**를 쉽게 만들기 위한 문법이다.  
+> 이번 미션에서는 `Transaction`, `Budget`처럼 "값을 담는 객체"를 만들 때 아주 잘 맞는다.
+
 장점:
 
 - 생성자 `__init__`을 자동으로 만들어준다.
@@ -312,6 +573,250 @@ class Transaction:
 
 > [!warning]
 > 실제 구현에서는 `tags: list[str] = []`처럼 빈 리스트를 기본값으로 직접 두면 안 된다. 가변 객체 기본값 문제 때문에 `field(default_factory=list)`를 써야 한다.
+
+## 4.5 dataclass가 없으면 어떻게 될까?
+
+먼저 일반 클래스로 거래 데이터를 표현한다고 생각해보자.
+
+```python
+class Transaction:
+    def __init__(self, id, type, date, amount, category, memo="", tags=None):
+        self.id = id
+        self.type = type
+        self.date = date
+        self.amount = amount
+        self.category = category
+        self.memo = memo
+        self.tags = tags or []
+```
+
+거래 하나를 만들면:
+
+```python
+tx = Transaction(
+    id="TX-000001",
+    type="expense",
+    date="2024-01-15",
+    amount=15000,
+    category="food",
+    memo="점심",
+    tags=["meal"],
+)
+```
+
+이 방식도 가능하다.  
+하지만 데이터 클래스가 많아질수록 다음 코드가 계속 반복된다.
+
+```text
+필드 이름 받기
+받은 값을 self에 넣기
+기본값 처리하기
+객체 출력 형식 만들기
+객체 비교 방식 만들기
+```
+
+`dataclass`는 이런 반복을 줄여준다.
+
+## 4.6 dataclass로 쓰면 무엇이 자동으로 생길까?
+
+다음 코드를 보자.
+
+```python
+from dataclasses import dataclass, field
+
+@dataclass
+class Transaction:
+    id: str
+    type: str
+    date: str
+    amount: int
+    category: str
+    memo: str = ""
+    tags: list[str] = field(default_factory=list)
+```
+
+이렇게 쓰면 Python이 내부적으로 다음과 비슷한 생성자를 만들어준다.
+
+```python
+def __init__(self, id, type, date, amount, category, memo="", tags=None):
+    self.id = id
+    self.type = type
+    self.date = date
+    self.amount = amount
+    self.category = category
+    self.memo = memo
+    self.tags = tags
+```
+
+즉, 직접 `__init__`을 작성하지 않아도 된다.
+
+객체를 출력했을 때도 보기 좋다.
+
+```python
+tx = Transaction(
+    id="TX-000001",
+    type="expense",
+    date="2024-01-15",
+    amount=15000,
+    category="food",
+)
+
+print(tx)
+```
+
+일반 객체라면 이런 식으로 보일 수 있다.
+
+```text
+<__main__.Transaction object at 0x...>
+```
+
+`dataclass`는 보통 이런 식으로 필드 내용을 보여준다.
+
+```text
+Transaction(id='TX-000001', type='expense', date='2024-01-15', amount=15000, category='food', memo='', tags=[])
+```
+
+디버깅할 때 훨씬 편하다.
+
+## 4.7 `field(default_factory=list)`가 왜 필요할까?
+
+초보자가 자주 하는 실수가 있다.
+
+```python
+@dataclass
+class Transaction:
+    id: str
+    tags: list[str] = []
+```
+
+이렇게 쓰면 모든 `Transaction` 객체가 같은 리스트를 공유할 수 있다.  
+한 거래의 태그를 수정했는데 다른 거래에도 영향을 줄 수 있다는 뜻이다.
+
+그래서 리스트, 딕셔너리처럼 바뀔 수 있는 값은 이렇게 써야 한다.
+
+```python
+from dataclasses import dataclass, field
+
+@dataclass
+class Transaction:
+    id: str
+    tags: list[str] = field(default_factory=list)
+```
+
+`default_factory=list`의 의미:
+
+```text
+객체를 새로 만들 때마다 빈 리스트를 새로 만들어라.
+```
+
+즉, 거래마다 독립적인 태그 리스트를 갖게 된다.
+
+## 4.8 dataclass와 타입 힌트
+
+`dataclass`는 타입 힌트와 함께 쓴다.
+
+```python
+@dataclass
+class Budget:
+    month: str
+    amount: int
+```
+
+여기서:
+
+| 필드 | 타입 | 의미 |
+| --- | --- | --- |
+| `month` | `str` | `YYYY-MM` 형식 월 |
+| `amount` | `int` | 예산 금액 |
+
+타입 힌트가 있다고 해서 Python이 항상 자동으로 타입을 강제하는 것은 아니다.
+
+```python
+budget = Budget(month="2024-01", amount="abc")
+```
+
+이런 코드가 실행 자체는 될 수 있다.  
+그래서 입력 검증은 여전히 따로 해야 한다.
+
+타입 힌트의 역할은 다음에 가깝다.
+
+```text
+이 필드는 이런 타입으로 쓰기로 약속한다.
+IDE와 사람이 코드를 읽기 쉽게 한다.
+검증 함수가 무엇을 확인해야 하는지 명확해진다.
+```
+
+## 4.9 dataclass와 파일 저장
+
+파일에 저장할 때는 dataclass 객체를 그대로 저장할 수 없다.  
+JSON으로 저장하려면 보통 딕셔너리로 바꿔야 한다.
+
+예:
+
+```python
+from dataclasses import asdict
+
+tx = Transaction(
+    id="TX-000001",
+    type="expense",
+    date="2024-01-15",
+    amount=15000,
+    category="food",
+)
+
+data = asdict(tx)
+```
+
+`data`는 이런 딕셔너리가 된다.
+
+```python
+{
+    "id": "TX-000001",
+    "type": "expense",
+    "date": "2024-01-15",
+    "amount": 15000,
+    "category": "food",
+    "memo": "",
+    "tags": [],
+}
+```
+
+이제 `json.dumps(data)`로 JSON 문자열을 만들 수 있다.
+
+반대로 파일에서 읽은 딕셔너리를 dataclass 객체로 만들 수도 있다.
+
+```python
+data = {
+    "id": "TX-000001",
+    "type": "expense",
+    "date": "2024-01-15",
+    "amount": 15000,
+    "category": "food",
+    "memo": "",
+    "tags": [],
+}
+
+tx = Transaction(**data)
+```
+
+`Transaction(**data)`는 딕셔너리의 키와 값을 생성자 인자로 풀어서 전달한다.
+
+```python
+Transaction(
+    id="TX-000001",
+    type="expense",
+    date="2024-01-15",
+    amount=15000,
+    category="food",
+    memo="",
+    tags=[],
+)
+```
+
+와 비슷하다.
+
+> [!tip]
+> 이번 미션에서는 `Transaction -> dict -> JSONL 저장`, `JSONL 읽기 -> dict -> Transaction` 흐름을 자주 쓰게 된다.
 
 ---
 
@@ -1044,6 +1549,214 @@ transactions.jsonl 전체를 리스트로 만들지 않고,
 한 줄씩 읽으면서 조건에 맞는 거래만 출력한다.
 ```
 
+## 8.11.1 스트리밍 처리를 일상 예시로 이해하기
+
+스트리밍 처리는 물건을 한꺼번에 창고로 다 옮긴 뒤 검사하는 방식이 아니라, **컨베이어 벨트 위에 올라오는 물건을 하나씩 검사하는 방식**에 가깝다.
+
+```text
+전체 로딩 방식:
+상자 10만 개를 전부 방 안에 넣는다.
+그다음 하나씩 열어본다.
+
+스트리밍 방식:
+상자가 하나 들어온다.
+검사한다.
+필요하면 처리한다.
+다음 상자가 들어온다.
+검사한다.
+```
+
+가계부 파일로 바꿔 말하면:
+
+```text
+전체 로딩 방식:
+transactions.jsonl의 모든 거래를 리스트로 만든다.
+그 리스트를 검색하거나 요약한다.
+
+스트리밍 방식:
+transactions.jsonl을 한 줄 읽는다.
+그 한 줄의 거래만 검사한다.
+필요한 계산을 한다.
+다음 줄로 넘어간다.
+```
+
+## 8.11.2 전체 로딩 방식의 문제
+
+다음 코드는 이해하기 쉽다.
+
+```python
+def read_all(path):
+    rows = []
+
+    with open(path, "r", encoding="utf-8") as file:
+        for line in file:
+            rows.append(line)
+
+    return rows
+```
+
+하지만 이 코드는 파일의 모든 줄을 리스트에 담는다.
+
+파일이 10줄이면 괜찮다.  
+파일이 100줄이어도 괜찮다.  
+하지만 파일이 100만 줄이면 부담이 커진다.
+
+문제:
+
+- 메모리를 많이 사용한다.
+- 첫 결과를 얻기까지 전체 파일을 읽어야 한다.
+- 검색 조건에 맞는 거래가 3개뿐이어도 100만 줄을 전부 리스트에 담는다.
+
+## 8.11.3 스트리밍 방식의 장점
+
+스트리밍 방식은 한 줄씩 처리한다.
+
+```python
+def iter_lines(path):
+    with open(path, "r", encoding="utf-8") as file:
+        for line in file:
+            yield line
+```
+
+이 함수는 파일 전체를 리스트로 만들지 않는다.
+
+사용:
+
+```python
+for line in iter_lines("transactions.jsonl"):
+    print(line)
+```
+
+흐름:
+
+```text
+파일 첫 줄 읽기
+-> yield로 바깥에 전달
+-> for문 본문 실행
+-> 파일 둘째 줄 읽기
+-> yield로 바깥에 전달
+-> for문 본문 실행
+```
+
+장점:
+
+- 메모리를 적게 쓴다.
+- 큰 파일에 강하다.
+- 조건에 맞지 않는 데이터는 바로 버릴 수 있다.
+- 검색, 요약, export 같은 작업에 잘 맞는다.
+
+## 8.11.4 스트리밍 검색 예시
+
+예를 들어 `category`가 `food`인 거래만 찾는다고 하자.
+
+전체 로딩 방식:
+
+```python
+transactions = read_all_transactions(path)
+
+for tx in transactions:
+    if tx.category == "food":
+        print(tx)
+```
+
+이 방식은 모든 거래를 먼저 메모리에 올린다.
+
+스트리밍 방식:
+
+```python
+for tx in iter_transactions(path):
+    if tx.category == "food":
+        print(tx)
+```
+
+이 방식은 한 거래씩 읽으면서 조건을 확인한다.
+
+```text
+TX-000001 읽기 -> food인가? 맞으면 출력
+TX-000002 읽기 -> food인가? 아니면 버림
+TX-000003 읽기 -> food인가? 맞으면 출력
+```
+
+## 8.11.5 스트리밍 요약 예시
+
+요약은 모든 거래를 출력할 필요가 없다.  
+필요한 숫자만 계속 더하면 된다.
+
+```python
+total_income = 0
+total_expense = 0
+
+for tx in iter_transactions(path):
+    if not tx.date.startswith("2024-01"):
+        continue
+
+    if tx.type == "income":
+        total_income += tx.amount
+    elif tx.type == "expense":
+        total_expense += tx.amount
+```
+
+이 코드는 거래를 모두 리스트에 저장하지 않는다.  
+대신 `total_income`, `total_expense`라는 숫자만 계속 갱신한다.
+
+이런 형태가 스트리밍 처리의 장점이 가장 잘 드러나는 예다.
+
+## 8.11.6 스트리밍 처리에도 한계가 있다
+
+스트리밍 처리는 좋지만 모든 문제를 해결하지는 않는다.
+
+### 정렬
+
+정렬은 전체 데이터를 비교해야 한다.
+
+```python
+sorted_transactions = sorted(iter_transactions(path), key=lambda tx: tx.date)
+```
+
+이 코드는 겉보기에는 제너레이터를 쓰지만, `sorted()`가 내부적으로 모든 값을 모은다.
+
+즉, 최신순 정렬을 완벽하게 하려면 어느 정도 메모리를 써야 한다.
+
+### 여러 번 반복
+
+제너레이터는 한 번 끝까지 읽으면 다시 사용할 수 없다.
+
+```python
+transactions = iter_transactions(path)
+
+for tx in transactions:
+    ...
+
+for tx in transactions:
+    ...  # 이미 소비되어 아무것도 안 나올 수 있음
+```
+
+다시 읽고 싶으면 새 제너레이터를 만들어야 한다.
+
+```python
+for tx in iter_transactions(path):
+    ...
+
+for tx in iter_transactions(path):
+    ...
+```
+
+## 8.11.7 이번 미션에서의 현실적인 선택
+
+이번 미션에서는 다음 기준으로 생각하면 된다.
+
+| 기능 | 스트리밍 적합도 | 이유 |
+| --- | --- | --- |
+| `search` | 높음 | 조건에 맞는 거래만 하나씩 찾으면 됨 |
+| `summary` | 높음 | 합계 숫자만 누적하면 됨 |
+| `export` | 높음 | 조건에 맞는 거래를 CSV에 하나씩 쓰면 됨 |
+| `list --limit` | 중간 | 최신순 때문에 일부 정렬 또는 최근 N개 관리 필요 |
+| `update/delete` | 높음 | 원본 파일을 한 줄씩 읽고 임시 파일에 쓰면 됨 |
+
+> [!important]
+> 스트리밍 처리는 "무조건 리스트를 쓰지 말라"는 뜻이 아니다.  
+> **파일을 읽는 기본 방식은 한 줄씩 처리하되, 정렬처럼 꼭 필요한 경우에만 리스트로 모은다**고 이해하면 된다.
+
 ## 8.12 최신순 출력과 스트리밍의 충돌
 
 요구사항에는 `list`와 `search` 결과를 최신순으로 출력하라는 조건이 있다.
@@ -1319,6 +2032,174 @@ add_transaction("2024-01-15", 15000)
 7. "함수 실행 후" 출력
 ```
 
+## 9.7.1 `*args` 쉽게 이해하기
+
+`*args`는 함수에 들어온 **위치 인자들을 튜플로 모아주는 문법**이다.
+
+위치 인자는 이름 없이 순서대로 전달하는 값이다.
+
+```python
+def add(a, b):
+    return a + b
+
+add(3, 5)
+```
+
+여기서 `3`과 `5`가 위치 인자다.
+
+`*args`를 쓰면 인자 개수가 정해져 있지 않아도 받을 수 있다.
+
+```python
+def show_args(*args):
+    print(args)
+
+show_args(1, 2, 3)
+```
+
+출력:
+
+```text
+(1, 2, 3)
+```
+
+즉:
+
+```text
+*args = 위치 인자를 전부 모은 튜플
+```
+
+예:
+
+```python
+def wrapper(*args):
+    print(args)
+
+wrapper("2024-01-15", 15000, "food")
+```
+
+출력:
+
+```text
+("2024-01-15", 15000, "food")
+```
+
+## 9.7.2 `**kwargs` 쉽게 이해하기
+
+`**kwargs`는 함수에 들어온 **키워드 인자들을 딕셔너리로 모아주는 문법**이다.
+
+키워드 인자는 이름을 붙여 전달하는 값이다.
+
+```python
+def add_transaction(date, amount, category):
+    ...
+
+add_transaction(date="2024-01-15", amount=15000, category="food")
+```
+
+여기서 `date=...`, `amount=...`, `category=...`가 키워드 인자다.
+
+`**kwargs`를 쓰면 이런 키워드 인자들을 딕셔너리로 받을 수 있다.
+
+```python
+def show_kwargs(**kwargs):
+    print(kwargs)
+
+show_kwargs(date="2024-01-15", amount=15000, category="food")
+```
+
+출력:
+
+```text
+{"date": "2024-01-15", "amount": 15000, "category": "food"}
+```
+
+즉:
+
+```text
+**kwargs = 키워드 인자를 전부 모은 딕셔너리
+```
+
+## 9.7.3 데코레이터에서 왜 `*args`, `**kwargs`를 쓸까?
+
+데코레이터는 여러 종류의 함수를 감쌀 수 있어야 한다.
+
+예를 들어 다음 함수들은 인자 모양이 다 다르다.
+
+```python
+def handle_add_command(args):
+    ...
+
+def calculate_summary(month, top):
+    ...
+
+def save_transaction(transaction, data_dir="./data"):
+    ...
+```
+
+데코레이터가 특정 인자만 받도록 만들면 한 종류의 함수만 감쌀 수 있다.
+
+```python
+def wrapper(args):
+    return func(args)
+```
+
+이렇게 만들면 `handle_add_command(args)`는 감쌀 수 있지만, `calculate_summary(month, top)`은 감싸기 어렵다.
+
+그래서 데코레이터의 `wrapper`는 보통 이렇게 만든다.
+
+```python
+def wrapper(*args, **kwargs):
+    return func(*args, **kwargs)
+```
+
+이 뜻은 다음과 같다.
+
+```text
+어떤 위치 인자가 들어오든 args로 받고,
+어떤 키워드 인자가 들어오든 kwargs로 받고,
+그대로 원래 함수에 다시 전달한다.
+```
+
+예:
+
+```python
+def wrapper(*args, **kwargs):
+    print("실행 전")
+    result = func(*args, **kwargs)
+    print("실행 후")
+    return result
+```
+
+이렇게 하면 인자 모양이 다른 함수도 하나의 데코레이터로 감쌀 수 있다.
+
+## 9.7.4 `*args`, `**kwargs`를 다시 풀어 전달하기
+
+`*args`와 `**kwargs`는 받을 때도 쓰지만, 다시 전달할 때도 쓴다.
+
+```python
+def original(a, b, c=None):
+    print(a, b, c)
+
+args = (1, 2)
+kwargs = {"c": 3}
+
+original(*args, **kwargs)
+```
+
+이 코드는 다음과 같다.
+
+```python
+original(1, 2, c=3)
+```
+
+데코레이터에서:
+
+```python
+func(*args, **kwargs)
+```
+
+는 "내가 받은 인자들을 원래 함수에 그대로 넘겨라"라는 뜻이다.
+
 ## 9.8 반환값이 있는 함수 감싸기
 
 원래 함수가 값을 반환한다면, wrapper도 그 값을 다시 반환해야 한다.
@@ -1355,6 +2236,150 @@ def handle_list_command(args):
     return 0
 ```
 
+## 9.8.1 데코레이터의 함수 반환값이 왜 중요할까?
+
+데코레이터는 원래 함수를 감싼다.  
+그런데 감싼 함수가 원래 함수의 결과를 돌려주지 않으면, 바깥 코드는 결과를 잃어버린다.
+
+예를 들어 원래 함수가 계산 결과를 반환한다고 하자.
+
+```python
+def add(a, b):
+    return a + b
+```
+
+잘못된 데코레이터:
+
+```python
+def bad_decorator(func):
+    def wrapper(*args, **kwargs):
+        print("계산 시작")
+        func(*args, **kwargs)
+        print("계산 끝")
+
+    return wrapper
+```
+
+사용:
+
+```python
+@bad_decorator
+def add(a, b):
+    return a + b
+
+result = add(3, 5)
+print(result)
+```
+
+출력:
+
+```text
+계산 시작
+계산 끝
+None
+```
+
+원래 `add(3, 5)`는 `8`을 반환해야 한다.  
+하지만 `wrapper`가 `func()`의 결과를 반환하지 않았기 때문에 `None`이 나온다.
+
+올바른 데코레이터:
+
+```python
+def good_decorator(func):
+    def wrapper(*args, **kwargs):
+        print("계산 시작")
+        result = func(*args, **kwargs)
+        print("계산 끝")
+        return result
+
+    return wrapper
+```
+
+이제:
+
+```python
+result = add(3, 5)
+```
+
+는 다시 `8`을 받을 수 있다.
+
+## 9.8.2 CLI에서 반환값은 exit code일 수 있다
+
+이번 미션의 CLI 명령 함수는 이런 식으로 설계할 수 있다.
+
+```python
+def handle_list_command(args):
+    ...
+    return 0
+```
+
+여기서 `0`은 정상 종료를 뜻한다.
+
+오류가 있으면:
+
+```python
+def handle_delete_command(args):
+    ...
+    return 1
+```
+
+처럼 `0`이 아닌 값을 반환할 수 있다.
+
+그런데 데코레이터가 반환값을 버리면 문제가 생긴다.
+
+```python
+@bad_decorator
+def handle_list_command(args):
+    return 0
+```
+
+이 경우 실제 반환값이 `None`이 될 수 있다.  
+그러면 프로그램의 종료 코드 처리도 애매해진다.
+
+따라서 데코레이터는 항상 원래 함수의 반환값을 보존해야 한다.
+
+```python
+result = func(*args, **kwargs)
+return result
+```
+
+## 9.8.3 예외 처리 데코레이터의 반환값
+
+예외 처리 데코레이터는 조금 다르다.
+
+```python
+def handle_errors(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except AppError:
+            return 1
+
+    return wrapper
+```
+
+정상 상황:
+
+```text
+원래 함수가 return 0
+-> 데코레이터도 return 0
+```
+
+오류 상황:
+
+```text
+원래 함수 실행 중 AppError 발생
+-> 데코레이터가 오류 메시지 출력
+-> return 1
+```
+
+즉, 데코레이터가 반환값을 보존한다는 말은 다음 뜻이다.
+
+```text
+정상일 때는 원래 함수의 결과를 그대로 돌려준다.
+오류를 처리하는 데코레이터라면 오류 상황에서 약속된 오류 값을 돌려준다.
+```
+
 ## 9.9 함수 이름 보존하기: `functools.wraps`
 
 데코레이터를 만들 때는 `functools.wraps`를 자주 사용한다.
@@ -1379,6 +2404,131 @@ def simple_decorator(func):
 
 > [!tip]
 > 데코레이터를 직접 만들 때는 거의 습관처럼 `@wraps(func)`를 붙이는 것이 좋다.
+
+## 9.9.1 `functools.wraps`가 없으면 생기는 일
+
+데코레이터는 원래 함수를 `wrapper`로 바꾼다.
+
+```python
+def simple_decorator(func):
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return wrapper
+
+@simple_decorator
+def handle_add_command(args):
+    """거래를 추가한다."""
+    return 0
+```
+
+이제 함수 이름을 확인해보면:
+
+```python
+print(handle_add_command.__name__)
+```
+
+`handle_add_command`가 아니라 `wrapper`로 보일 수 있다.
+
+```text
+wrapper
+```
+
+왜냐하면 실제로는 다음과 같은 일이 일어났기 때문이다.
+
+```python
+handle_add_command = simple_decorator(handle_add_command)
+```
+
+그리고 `simple_decorator()`가 반환한 것은 `wrapper` 함수다.
+
+## 9.9.2 이름이 바뀌면 왜 불편할까?
+
+함수 이름이 `wrapper`로 바뀌면 다음 상황에서 불편하다.
+
+- 디버깅할 때 어떤 함수인지 알아보기 어렵다.
+- 로그에 함수 이름을 남길 때 전부 `wrapper`로 나온다.
+- 테스트나 문서화 도구가 원래 함수 정보를 잃을 수 있다.
+- `help()`나 함수 설명을 볼 때 원래 설명이 사라질 수 있다.
+
+예를 들어 로그가 이렇게 나오면 별 도움이 안 된다.
+
+```text
+[로그] wrapper 실행
+[로그] wrapper 실행
+[로그] wrapper 실행
+```
+
+원래는 이렇게 나와야 읽기 좋다.
+
+```text
+[로그] handle_add_command 실행
+[로그] handle_search_command 실행
+[로그] handle_summary_command 실행
+```
+
+## 9.9.3 `@wraps(func)`를 붙이면?
+
+`functools.wraps`를 사용하면 wrapper 함수가 원래 함수의 정보를 물려받는다.
+
+```python
+from functools import wraps
+
+def simple_decorator(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return wrapper
+```
+
+이제:
+
+```python
+print(handle_add_command.__name__)
+```
+
+는 원래 이름에 가깝게 유지된다.
+
+```text
+handle_add_command
+```
+
+`@wraps(func)`가 보존해주는 대표 정보:
+
+| 정보 | 의미 |
+| --- | --- |
+| `__name__` | 함수 이름 |
+| `__doc__` | 함수 설명 문자열 |
+| `__module__` | 함수가 속한 모듈 |
+| 일부 메타데이터 | 디버깅과 문서화에 필요한 정보 |
+
+## 9.9.4 wraps를 어디에 붙여야 할까?
+
+`@wraps(func)`는 `wrapper` 함수 바로 위에 붙인다.
+
+```python
+def my_decorator(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        ...
+
+    return wrapper
+```
+
+헷갈리지 말아야 할 점:
+
+```python
+@wraps(func)
+def wrapper(...):
+    ...
+```
+
+는 `wrapper`를 꾸미는 것이다.  
+즉, "이 wrapper는 func를 감싼 함수이니 func의 정보를 보존해라"라는 뜻이다.
+
+> [!important]
+> 데코레이터를 만들 때 `wrapper`가 있다면 거의 항상 `@wraps(func)`도 같이 있다고 기억하면 된다.
 
 ## 9.10 예외 처리 데코레이터
 
@@ -2119,11 +3269,113 @@ python -m budget_app update --id TX-000012
 
 미션은 한 파일에 몰아넣지 말고 최소 3개 이상 모듈로 분리하라고 요구한다.
 
+> [!summary]
+> 모듈화는 코드를 역할별 파일로 나누는 것이고, 계층 분리는 각 파일이 맡을 책임을 정하는 것이다.  
+> 쉽게 말해 **CLI는 입력만, Service는 규칙만, Repository는 파일 저장만, Model은 데이터 모양만 담당하게 나누는 것**이다.
+
 권장 계층:
 
 ```text
 CLI / Service / Repository / Model
 ```
+
+## 16.0 모듈이란?
+
+Python에서 모듈은 보통 `.py` 파일 하나를 말한다.
+
+예:
+
+```text
+models.py
+services.py
+storage.py
+cli.py
+```
+
+각 파일은 하나의 모듈이다.
+
+예를 들어 `models.py`에 `Transaction` 클래스를 정의하면 다른 파일에서 가져다 쓸 수 있다.
+
+```python
+from budget_app.models import Transaction
+```
+
+모듈화는 코드를 파일별로 나누는 작업이다.
+
+```text
+한 파일에 전부 넣기:
+main.py 안에 CLI, 저장, 계산, 검증, 출력이 전부 있음
+
+모듈화:
+models.py     -> 데이터 구조
+storage.py    -> 파일 읽기/쓰기
+services.py   -> 업무 규칙
+cli.py        -> 명령어 처리
+validators.py -> 입력 검증
+```
+
+## 16.0.1 왜 한 파일에 몰아넣으면 힘들까?
+
+처음에는 한 파일이 편해 보인다.
+
+```text
+main.py 하나만 열면 모든 코드가 보인다.
+파일 이동을 안 해도 된다.
+빨리 시작할 수 있다.
+```
+
+하지만 기능이 늘어나면 문제가 생긴다.
+
+```text
+add 기능 코드
+list 기능 코드
+search 기능 코드
+summary 계산 코드
+파일 저장 코드
+CSV 처리 코드
+오류 처리 코드
+출력 포맷 코드
+```
+
+이 모든 것이 한 파일에 섞이면 다음 문제가 생긴다.
+
+- 어디에 어떤 코드가 있는지 찾기 어렵다.
+- 작은 수정이 다른 기능에 영향을 줄 수 있다.
+- 같은 코드가 여러 곳에 반복된다.
+- 테스트하기 어렵다.
+- 나중에 저장 방식을 바꾸기 어렵다.
+
+모듈화는 이 문제를 줄이기 위한 정리 방식이다.
+
+## 16.0.2 계층 분리란?
+
+계층 분리는 단순히 파일을 나누는 것보다 한 단계 더 나아간 개념이다.
+
+파일을 아무렇게나 나누면 모듈화는 되었지만 구조가 여전히 복잡할 수 있다.
+
+나쁜 예:
+
+```text
+a.py
+b.py
+c.py
+```
+
+파일은 나뉘었지만 각 파일이 무엇을 담당하는지 알기 어렵다.
+
+좋은 예:
+
+```text
+models.py      -> 데이터 구조
+repositories.py -> 파일 저장소 접근
+services.py    -> 가계부 규칙
+cli.py         -> 사용자 명령 처리
+```
+
+계층 분리는 이렇게 책임을 기준으로 파일을 나누는 것이다.
+
+> [!important]
+> 모듈화가 "파일을 나누는 것"이라면, 계층 분리는 "책임을 기준으로 파일을 나누는 것"이다.
 
 ## 16.1 Model 계층
 
@@ -2138,6 +3390,43 @@ CLI / Service / Repository / Model
 ```text
 models.py
 ```
+
+Model 계층은 데이터의 모양을 정의한다.
+
+이번 미션의 대표 모델은 다음과 같다.
+
+```python
+@dataclass
+class Transaction:
+    id: str
+    type: str
+    date: str
+    amount: int
+    category: str
+    memo: str = ""
+    tags: list[str] = field(default_factory=list)
+```
+
+Model은 보통 이런 질문에 답한다.
+
+```text
+거래는 어떤 필드를 가지는가?
+예산은 어떤 필드를 가지는가?
+카테고리는 문자열만 있으면 되는가?
+파일에서 읽은 dict를 Transaction으로 어떻게 바꾸는가?
+Transaction을 dict로 어떻게 바꾸는가?
+```
+
+Model이 직접 하면 좋지 않은 일:
+
+```text
+터미널 입력 받기
+파일 열고 저장하기
+summary 출력하기
+사용자에게 오류 메시지 출력하기
+```
+
+Model은 데이터 모양에 집중한다.
 
 ## 16.2 Repository 계층
 
@@ -2160,6 +3449,61 @@ storage.py
 
 Repository가 있으면 서비스 계층은 파일 포맷을 자세히 몰라도 된다.
 
+Repository는 저장소 담당자다.
+
+이번 미션에서는 데이터베이스를 사용하지 않고 파일을 사용한다.  
+그래서 Repository는 파일 저장소와 대화한다.
+
+Repository가 하는 일:
+
+```text
+transactions.jsonl 파일 열기
+한 줄씩 읽기
+JSON 문자열을 dict로 바꾸기
+dict를 Transaction으로 바꾸기
+Transaction을 JSONL 한 줄로 저장하기
+update/delete 때 임시 파일로 교체하기
+```
+
+예:
+
+```python
+class TransactionRepository:
+    def iter_all(self):
+        ...
+
+    def append(self, transaction):
+        ...
+
+    def replace_all(self, transactions):
+        ...
+```
+
+Service는 이렇게 사용할 수 있다.
+
+```python
+for tx in transaction_repository.iter_all():
+    ...
+```
+
+중요한 점:
+
+```text
+Service는 transactions.jsonl이 정확히 어떻게 생겼는지 몰라도 된다.
+Repository가 알아서 파일을 읽고 Transaction 객체로 넘겨준다.
+```
+
+Repository가 직접 하면 좋지 않은 일:
+
+```text
+예산 초과 여부 판단하기
+카테고리별 TOP N 계산하기
+터미널에 예쁘게 출력하기
+argparse 옵션 처리하기
+```
+
+Repository는 저장과 읽기에 집중한다.
+
 ## 16.3 Service 계층
 
 Service는 실제 업무 규칙을 담당한다.
@@ -2177,6 +3521,65 @@ Service는 실제 업무 규칙을 담당한다.
 ```text
 services.py
 ```
+
+Service는 이 프로그램의 머리에 해당한다.
+
+예를 들어 거래 추가는 단순히 파일에 한 줄 쓰는 일이 아니다.
+
+거래 추가에는 이런 규칙이 있다.
+
+```text
+날짜가 올바른가?
+type이 income 또는 expense인가?
+amount가 양수인가?
+category가 등록되어 있는가?
+id를 어떻게 만들 것인가?
+저장 후 무엇을 반환할 것인가?
+```
+
+이런 규칙은 Service 계층에 두는 것이 좋다.
+
+예:
+
+```python
+class BudgetService:
+    def add_transaction(self, input_data):
+        # 1. 입력 검증
+        # 2. 카테고리 존재 확인
+        # 3. ID 생성
+        # 4. Transaction 생성
+        # 5. Repository에 저장 요청
+        # 6. 생성된 Transaction 반환
+        ...
+```
+
+Service가 Repository를 사용하는 흐름:
+
+```text
+Service:
+카테고리 목록이 필요해.
+
+Repository:
+categories.jsonl에서 읽어서 줄게.
+
+Service:
+입력된 카테고리가 목록에 있는지 확인할게.
+문제 없으면 거래를 만들어 저장해달라고 요청할게.
+
+Repository:
+transactions.jsonl에 저장할게.
+```
+
+Service가 직접 하면 좋지 않은 일:
+
+```text
+argparse 세팅
+input() 호출
+print()로 출력 포맷 만들기
+파일 open()을 직접 많이 다루기
+```
+
+Service는 업무 규칙에 집중한다.
 
 ## 16.4 CLI 계층
 
@@ -2197,6 +3600,49 @@ cli.py
 __main__.py
 ```
 
+CLI 계층은 사용자와 프로그램 사이의 창구다.
+
+CLI가 하는 일:
+
+```text
+argparse로 명령어 해석하기
+add 명령에서 input()으로 값 받기
+사용자에게 결과 출력하기
+오류 메시지 출력하기
+Service 함수 호출하기
+exit code 결정하기
+```
+
+예:
+
+```python
+def handle_add_command(args):
+    date = input("날짜(YYYY-MM-DD): ")
+    transaction_type = input("타입(income/expense): ")
+    category = input("카테고리: ")
+    amount = input("금액(양수): ")
+
+    transaction = service.add_transaction(
+        date=date,
+        transaction_type=transaction_type,
+        category=category,
+        amount=amount,
+    )
+
+    print(f"[저장 완료] id={transaction.id}")
+    return 0
+```
+
+CLI가 직접 하면 좋지 않은 일:
+
+```text
+transactions.jsonl에 직접 쓰기
+summary 계산 로직 직접 구현하기
+카테고리 삭제 정책 직접 판단하기
+```
+
+CLI는 사용자와의 입출력에 집중하고, 핵심 규칙은 Service에 맡긴다.
+
 ## 16.5 왜 나누는가?
 
 한 파일에 모두 넣으면 처음에는 빠르지만 곧 복잡해진다.
@@ -2207,6 +3653,234 @@ __main__.py
 - 테스트가 쉬워진다.
 - 저장 방식을 바꿔도 서비스 로직 변경이 줄어든다.
 - CLI 문구를 바꿔도 데이터 처리 로직은 그대로 둘 수 있다.
+
+## 16.6 계층별 흐름 예시: add
+
+`add` 명령이 실행될 때 흐름은 이렇게 나눌 수 있다.
+
+```text
+사용자
+-> CLI
+-> Service
+-> Repository
+-> File
+```
+
+조금 더 자세히:
+
+```text
+1. 사용자:
+   python -m budget_app add 실행
+
+2. CLI:
+   input()으로 날짜, 타입, 카테고리, 금액을 받음
+
+3. Service:
+   입력값 검증
+   카테고리 존재 확인
+   거래 ID 생성
+   Transaction 객체 생성
+
+4. Repository:
+   Transaction을 JSONL 한 줄로 변환
+   transactions.jsonl에 append
+
+5. CLI:
+   [저장 완료] id=TX-000001 출력
+```
+
+각 계층이 자기 일만 한다.
+
+## 16.7 계층별 흐름 예시: summary
+
+`summary` 명령은 이렇게 흐른다.
+
+```text
+1. CLI:
+   --month, --top 옵션을 argparse로 받음
+
+2. Service:
+   해당 월 거래만 필터링
+   총수입 계산
+   총지출 계산
+   잔액 계산
+   카테고리별 지출 TOP N 계산
+   예산 사용률 계산
+
+3. Repository:
+   거래를 한 줄씩 읽어서 Service에 제공
+   예산 파일에서 해당 월 예산 제공
+
+4. CLI:
+   계산 결과를 보기 좋게 출력
+```
+
+중요한 점:
+
+```text
+summary 계산은 Service가 한다.
+파일 읽기는 Repository가 한다.
+출력은 CLI가 한다.
+```
+
+## 16.8 추천 폴더 구조
+
+이번 미션에서는 다음 정도 구조가 적당하다.
+
+```text
+budget_app/
+  __init__.py
+  __main__.py
+  cli.py
+  models.py
+  repositories.py
+  services.py
+  validators.py
+  decorators.py
+  formatters.py
+```
+
+각 파일 역할:
+
+| 파일 | 역할 |
+| --- | --- |
+| `__main__.py` | `python -m budget_app` 실행 진입점 |
+| `cli.py` | argparse 설정, 명령어 라우팅, 입력/출력 |
+| `models.py` | `Transaction`, `Budget` 등 데이터 구조 |
+| `repositories.py` | 파일 읽기/쓰기, JSONL 처리 |
+| `services.py` | 거래 추가, 검색, 요약 등 업무 규칙 |
+| `validators.py` | 날짜, 금액, 타입, 카테고리 검증 |
+| `decorators.py` | 오류 처리, 실행 시간 측정 데코레이터 |
+| `formatters.py` | 거래 목록, summary 출력 문자열 생성 |
+
+`formatters.py`는 필수는 아니지만, 출력 포맷 코드가 많아지면 분리하면 좋다.
+
+## 16.9 의존 방향
+
+계층을 나눌 때는 어떤 파일이 어떤 파일을 import하는지도 중요하다.
+
+추천 방향:
+
+```text
+CLI -> Service -> Repository -> Model
+```
+
+또는:
+
+```text
+CLI -> Service
+Service -> Repository
+Service -> Model
+Repository -> Model
+```
+
+피하고 싶은 방향:
+
+```text
+Repository -> CLI
+Model -> CLI
+Model -> Service
+```
+
+왜냐하면 Repository나 Model은 사용자 입력/출력을 몰라야 하기 때문이다.
+
+좋은 흐름:
+
+```text
+cli.py가 services.py를 호출한다.
+services.py가 repositories.py를 호출한다.
+repositories.py가 models.py를 사용한다.
+```
+
+나쁜 흐름:
+
+```text
+models.py 안에서 input()을 호출한다.
+repositories.py 안에서 argparse를 다룬다.
+services.py 안에서 print()를 너무 많이 한다.
+```
+
+> [!tip]
+> 아래 계층은 위 계층을 몰라도 되는 구조가 유지보수하기 쉽다.  
+> `Model`은 가장 아래에 있고, `CLI`는 가장 위에 있다고 생각하면 된다.
+
+## 16.10 초보자가 헷갈리기 쉬운 기준
+
+어떤 코드를 어디에 넣어야 할지 헷갈릴 때는 질문을 던지면 된다.
+
+| 질문 | 넣을 곳 |
+| --- | --- |
+| "이 데이터는 어떤 필드를 가지지?" | `models.py` |
+| "파일에서 어떻게 읽고 쓰지?" | `repositories.py` |
+| "이 입력값이 유효한가?" | `validators.py` |
+| "거래 추가 규칙은 무엇이지?" | `services.py` |
+| "summary 계산은 어떻게 하지?" | `services.py` |
+| "사용자가 어떤 명령을 입력했지?" | `cli.py` |
+| "화면에 어떻게 보여줄까?" | `cli.py` 또는 `formatters.py` |
+| "오류를 공통으로 어떻게 처리하지?" | `decorators.py` |
+
+## 16.11 나쁜 구조와 좋은 구조 비교
+
+### 나쁜 구조
+
+```python
+def handle_add():
+    date = input("날짜: ")
+    amount = int(input("금액: "))
+
+    if amount <= 0:
+        print("오류")
+        return
+
+    with open("data/transactions.jsonl", "a") as file:
+        file.write(...)
+
+    print("저장 완료")
+```
+
+이 함수는 너무 많은 일을 한다.
+
+```text
+입력 받기
+검증하기
+파일 열기
+저장하기
+출력하기
+```
+
+### 좋은 구조
+
+```text
+CLI:
+입력 받기, 결과 출력
+
+Validator:
+금액 검증
+
+Service:
+거래 생성 규칙 처리
+
+Repository:
+파일 저장
+```
+
+함수 하나가 모든 일을 하지 않고, 각자 맡은 일을 처리한다.
+
+## 16.12 이 미션에서 기억할 핵심
+
+| 개념 | 쉬운 설명 |
+| --- | --- |
+| 모듈화 | 코드를 역할별 파일로 나누는 것 |
+| 계층 분리 | 파일을 책임 기준으로 나누는 것 |
+| Model | 데이터 모양 담당 |
+| Repository | 파일 읽기/쓰기 담당 |
+| Service | 가계부 규칙과 계산 담당 |
+| CLI | 사용자 명령과 출력 담당 |
+| Validator | 입력값 검증 담당 |
+| Decorator | 공통 오류 처리/시간 측정 담당 |
+
+이렇게 나누면 구현량은 처음에 조금 늘어나는 것처럼 보인다.  
+하지만 기능이 많아질수록 어디를 수정해야 하는지 명확해지고, 전체 코드가 훨씬 덜 흔들린다.
 
 ---
 
