@@ -8,6 +8,8 @@ tags:
   - vibe-coding
   - Python
   - CLI
+  - Docker
+  - GitHub
 ---
 
 # 파일 기반 가계부 콘솔 프로그램 단계별 진행 계획
@@ -21,18 +23,22 @@ tags:
 ```text
 0단계 기준 정하기
 → 1단계 프로젝트 뼈대
-→ 2단계 데이터 모델과 저장소
-→ 3단계 카테고리 기능
-→ 4단계 거래 추가
-→ 5단계 거래 목록
-→ 6단계 거래 검색
-→ 7단계 월별 요약
-→ 8단계 예산 기능
-→ 9단계 수정/삭제
-→ 10단계 CSV import/export
-→ 11단계 데코레이터와 공통 오류 처리
-→ 12단계 README 정리
-→ 13단계 테스트 시나리오 점검
+→ 2단계 Docker 개발 기준 잡기
+→ 3단계 데이터 모델과 저장소
+→ 4단계 카테고리 기능
+→ 5단계 거래 추가
+→ 6단계 거래 목록
+→ 7단계 거래 검색
+→ 8단계 월별 요약
+→ 9단계 예산 기능
+→ 10단계 수정/삭제
+→ 11단계 CSV import/export
+→ 12단계 데코레이터와 공통 오류 처리
+→ 13단계 Docker 실행 환경 구성
+→ 14단계 README와 최종 문서 정리
+→ 15단계 테스트 시나리오 점검
+→ 16단계 GitHub 원격 저장소 연결
+→ 17단계 다른 Mac에서 재현 검증
 ```
 
 ---
@@ -63,10 +69,18 @@ tags:
   - 추천: 사용 중인 카테고리는 삭제 차단
 - 기본 카테고리 자동 생성 여부 결정
   - 예: `food`, `transport`, `rent`, `salary`
+- Docker 사용 방식 결정
+  - 로컬 Python 실행도 지원할지
+  - Docker 실행을 기본 권장 방식으로 둘지
+  - 데이터 파일을 컨테이너 안에 둘지, 호스트의 `./data`를 마운트할지
+- GitHub 업로드 정책 결정
+  - `data/` 실제 가계부 데이터는 Git에 올리지 않는 것을 추천
+  - 대신 `data/.gitkeep` 또는 샘플 CSV만 관리
 
 ## 완료 기준
 
 - 저장 방식, 파일 구조, 명령 정책이 결정되어 있다.
+- Docker와 GitHub에서 어떤 파일을 관리할지 결정되어 있다.
 - 이후 단계에서 설계 선택을 다시 고민하지 않아도 된다.
 
 ---
@@ -92,6 +106,12 @@ tags:
 - `python -m budget_app --help` 실행 가능하게 만들기
 - `argparse` 기반 CLI 틀 만들기
 - README 초안 생성
+- `.gitignore` 초안 생성
+  - `__pycache__/`
+  - `.pytest_cache/`
+  - `.venv/`
+  - `data/*.jsonl`
+  - `*.log`
 
 ## 완료 기준
 
@@ -103,7 +123,44 @@ python -m budget_app --help
 
 ---
 
-# 2단계. 데이터 모델과 저장소 구현
+# 2단계. Docker 개발 기준 잡기
+
+## 목표
+
+나중에 맥북이 아닌 아이맥에서도 같은 방식으로 실행할 수 있도록 Docker 기준을 먼저 정한다.
+
+이 단계에서는 완성된 Docker 환경을 만들기보다, **어떤 방식으로 Docker화할지 설계만 고정**한다.
+
+## 할 일
+
+- Python 버전 결정
+  - 미션 요구: Python 3.10 이상
+  - 추천: `python:3.11-slim`
+- Docker 실행 방식 결정
+  - 추천: 프로젝트 폴더를 컨테이너에 마운트해서 실행
+- 데이터 저장 방식 결정
+  - 추천: 호스트의 `./data` 폴더를 컨테이너에 마운트
+  - 이유: 컨테이너를 지워도 가계부 데이터가 남아야 함
+- Docker에서 실행할 기본 명령 결정
+  - 예: `python -m budget_app --help`
+  - 예: `python -m budget_app list`
+- 나중에 만들 파일 목록 정리
+  - `Dockerfile`
+  - `docker-compose.yml`
+  - `.dockerignore`
+- GitHub에 올릴 파일과 올리지 않을 파일 정리
+  - 올릴 것: 소스 코드, 문서, Docker 설정, README
+  - 올리지 않을 것: 개인 가계부 데이터, 캐시, 가상환경
+
+## 완료 기준
+
+- Docker에서 어떤 Python 이미지를 쓸지 정해져 있다.
+- 데이터 보존을 위해 `./data`를 마운트한다는 정책이 정해져 있다.
+- 이후 구현할 때 Docker를 고려한 파일 경로 정책을 유지할 수 있다.
+
+---
+
+# 3단계. 데이터 모델과 저장소 구현
 
 ## 목표
 
@@ -121,6 +178,9 @@ python -m budget_app --help
   - `transactions.jsonl`
   - `categories.jsonl`
   - `budgets.jsonl`
+- Docker 컨테이너 안에서도 동일하게 동작하도록 상대 경로 기준 유지
+  - 기본값: `./data`
+  - 옵션: `--data-dir`
 - 거래 ID 생성 규칙 구현
   - 예: `TX-000001`
 - 거래를 한 줄씩 읽는 제너레이터 구현
@@ -131,10 +191,11 @@ python -m budget_app --help
 - 코드 내부에서 거래를 저장하고 다시 읽을 수 있다.
 - 저장 파일이 없을 때도 프로그램이 깨지지 않는다.
 - 거래 조회가 제너레이터 기반으로 동작한다.
+- 로컬과 Docker 모두 같은 `./data` 구조를 사용할 수 있는 형태다.
 
 ---
 
-# 3단계. category 기능 구현
+# 4단계. category 기능 구현
 
 ## 목표
 
@@ -162,7 +223,7 @@ python -m budget_app category remove food
 
 ---
 
-# 4단계. add 기능 구현
+# 5단계. add 기능 구현
 
 ## 목표
 
@@ -205,7 +266,7 @@ python -m budget_app add
 
 ---
 
-# 5단계. list 기능 구현
+# 6단계. list 기능 구현
 
 ## 목표
 
@@ -230,7 +291,7 @@ python -m budget_app list --limit 3
 
 ---
 
-# 6단계. search 기능 구현
+# 7단계. search 기능 구현
 
 ## 목표
 
@@ -265,7 +326,7 @@ python -m budget_app search --from 2024-01-01 --to 2024-01-31 --category food --
 
 ---
 
-# 7단계. summary 기능 구현
+# 8단계. summary 기능 구현
 
 ## 목표
 
@@ -298,7 +359,7 @@ python -m budget_app summary --month 2024-01 --top 3
 
 ---
 
-# 8단계. budget 기능 구현
+# 9단계. budget 기능 구현
 
 ## 목표
 
@@ -326,7 +387,7 @@ python -m budget_app summary --month 2024-01
 
 ---
 
-# 9단계. update/delete 구현
+# 10단계. update/delete 구현
 
 ## 목표
 
@@ -356,7 +417,7 @@ python -m budget_app update --id TX-000002 --amount 18000
 
 ---
 
-# 10단계. CSV import/export 구현
+# 11단계. CSV import/export 구현
 
 ## 목표
 
@@ -388,7 +449,7 @@ CSV로 거래를 가져오고 내보낼 수 있다.
 
 ---
 
-# 11단계. 데코레이터와 공통 오류 처리
+# 12단계. 데코레이터와 공통 오류 처리
 
 ## 목표
 
@@ -417,7 +478,51 @@ CSV로 거래를 가져오고 내보낼 수 있다.
 
 ---
 
-# 12단계. README와 최종 문서 정리
+# 13단계. Docker 실행 환경 구성
+
+## 목표
+
+맥북, 아이맥 등 어떤 Mac에서 실행해도 같은 Python 환경으로 동작하도록 Docker 실행 환경을 만든다.
+
+## 할 일
+
+- `Dockerfile` 작성
+  - Python 3.10 이상 이미지 사용
+  - 추천: `python:3.11-slim`
+  - 작업 디렉터리 설정
+  - 프로젝트 파일 복사 또는 마운트 기준 정리
+- `.dockerignore` 작성
+  - `.git`
+  - `__pycache__/`
+  - `.pytest_cache/`
+  - `.venv/`
+  - `data/*.jsonl`
+  - 불필요한 로컬 파일 제외
+- `docker-compose.yml` 작성
+  - 현재 프로젝트를 컨테이너에 마운트
+  - `./data`를 컨테이너의 데이터 폴더로 마운트
+  - 기본 실행 명령 또는 쉘 진입 명령 제공
+- Docker 실행 명령 정리
+  - 이미지 빌드
+  - help 실행
+  - `add`, `list`, `summary` 등 명령 실행
+- Docker 안에서 파일 권한과 데이터 저장 위치 확인
+- 로컬 Python 실행과 Docker 실행이 같은 결과를 내는지 비교
+
+## 완료 기준
+
+다음과 비슷한 명령이 동작한다.
+
+```bash
+docker compose run --rm app python -m budget_app --help
+docker compose run --rm app python -m budget_app list --limit 3
+```
+
+Docker에서 실행해도 `./data`에 데이터가 저장되고, 컨테이너를 삭제해도 데이터가 유지된다.
+
+---
+
+# 14단계. README와 최종 문서 정리
 
 ## 목표
 
@@ -429,10 +534,16 @@ CSV로 거래를 가져오고 내보낼 수 있다.
 - 저장 파일 위치 작성
 - 저장 파일 형식 작성
 - 주요 명령 예시 작성
+- Docker 실행 방법 작성
+  - Docker 설치 필요 여부
+  - 이미지 빌드 방법
+  - `docker compose run --rm app ...` 사용 예시
+  - `./data` 볼륨 마운트 설명
 - CSV import/export 스키마 작성
 - update 정책 작성
 - category 삭제 정책 작성
 - 데이터 초기화 정책 작성
+- GitHub에서 clone 후 실행하는 방법 작성
 - 기능 목록 체크리스트 작성
 - 선택 구현 사항이 있다면 별도 표시
 
@@ -443,12 +554,14 @@ README만 보고 다음을 알 수 있다.
 - 어떻게 실행하는지
 - 데이터가 어디 저장되는지
 - 어떤 명령을 사용할 수 있는지
+- Docker로 어떻게 실행하는지
+- 다른 Mac에서 어떻게 같은 환경을 재현하는지
 - CSV는 어떤 형식이어야 하는지
 - 오류 상황은 어떻게 처리되는지
 
 ---
 
-# 13단계. 테스트 시나리오 점검
+# 15단계. 테스트 시나리오 점검
 
 ## 목표
 
@@ -478,12 +591,102 @@ README만 보고 다음을 알 수 있다.
 - 파일 안정성 확인
   - update/delete 후 파일이 깨지지 않는지 확인
 - README 명령 예시 검증
+- Docker 실행 테스트
+  - `docker compose run --rm app python -m budget_app --help`
+  - `docker compose run --rm app python -m budget_app list`
+  - `docker compose run --rm app python -m budget_app summary --month YYYY-MM`
+- Docker에서 생성한 데이터가 호스트 `./data`에 남는지 확인
 
 ## 완료 기준
 
 - 주요 기능이 터미널에서 실제로 동작한다.
 - 오류 상황에서도 프로그램이 친절하게 안내한다.
+- Docker 환경에서도 동일하게 동작한다.
 - 제출 전 체크리스트를 통과한다.
+
+---
+
+# 16단계. GitHub 원격 저장소 연결
+
+## 목표
+
+프로젝트를 GitHub 원격 저장소에 올려 맥북과 아이맥에서 같은 코드를 받을 수 있게 만든다.
+
+## 할 일
+
+- 로컬 Git 상태 확인
+  - 변경 파일 확인
+  - 커밋 누락 여부 확인
+- `.gitignore` 점검
+  - 개인 데이터 파일이 올라가지 않도록 확인
+  - 예: `data/*.jsonl`
+- GitHub에서 새 원격 저장소 생성
+- 로컬 저장소에 remote 연결
+  - 예: `origin`
+- 첫 push 진행
+- GitHub 웹에서 파일이 정상 업로드됐는지 확인
+- README가 GitHub에서 보기 좋게 렌더링되는지 확인
+
+## 완료 기준
+
+GitHub 원격 저장소에 다음 파일들이 올라가 있다.
+
+- `budget_app/` 소스 코드
+- `docs/` 문서
+- `README.md`
+- `Dockerfile`
+- `docker-compose.yml`
+- `.dockerignore`
+- `.gitignore`
+
+개인 가계부 데이터 파일은 올라가지 않는다.
+
+---
+
+# 17단계. 다른 Mac에서 재현 검증
+
+## 목표
+
+아이맥 같은 다른 Mac에서 GitHub 저장소를 clone한 뒤 Docker로 동일하게 실행되는지 확인한다.
+
+## 할 일
+
+- 아이맥에 필요한 도구 확인
+  - Git
+  - Docker Desktop
+- GitHub 저장소 clone
+
+```bash
+git clone <repository-url>
+```
+
+- 프로젝트 폴더로 이동
+
+```bash
+cd <repository-name>
+```
+
+- Docker 이미지 빌드 또는 compose 실행
+
+```bash
+docker compose build
+docker compose run --rm app python -m budget_app --help
+```
+
+- 기본 기능 실행 확인
+  - `category list`
+  - `add`
+  - `list`
+  - `summary`
+- `./data` 폴더가 자동 생성되는지 확인
+- 컨테이너를 지웠다가 다시 실행해도 `./data` 데이터가 유지되는지 확인
+- README의 안내만 보고 실행 가능한지 확인
+
+## 완료 기준
+
+- 아이맥에서 별도 Python 설치나 가상환경 세팅 없이 Docker로 실행된다.
+- 맥북과 아이맥에서 같은 명령이 같은 방식으로 동작한다.
+- 데이터는 각 Mac의 로컬 `./data` 폴더에 저장된다.
 
 ---
 
@@ -494,11 +697,14 @@ README만 보고 다음을 알 수 있다.
 ```text
 0단계 기준 정하기부터 하자.
 1단계 프로젝트 뼈대 만들어줘.
-2단계 데이터 모델과 저장소 구현하자.
-4단계 add 기능만 구현하고 테스트하자.
+2단계 Docker 개발 기준 잡자.
+3단계 데이터 모델과 저장소 구현하자.
+5단계 add 기능만 구현하고 테스트하자.
+13단계 Docker 실행 환경 구성하자.
+16단계 GitHub 원격 저장소 연결하자.
+17단계 아이맥에서 재현 검증하는 순서 정리하자.
 ```
 
 > [!tip]
 > 한 번에 여러 단계를 밀기보다, 한 단계 구현 후 실행 확인까지 하고 다음 단계로 넘어가는 것이 좋다.  
-> 이 프로젝트는 기능이 많아서 단계별로 고정하면서 가야 구조가 깔끔하게 유지된다.
-
+> 이 프로젝트는 기능이 많고 Docker/GitHub 재현까지 포함하므로, 단계별로 고정하면서 가야 구조와 실행 환경이 깔끔하게 유지된다.
