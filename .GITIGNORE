@@ -1,1 +1,16 @@
-2주차1단계.pdf
+.DS_Store
+__pycache__/
+*.py[cod]
+
+.venv/
+venv/
+env/
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+*.pdf
+data/*.jsonl
+data/*.csv
+*.log
